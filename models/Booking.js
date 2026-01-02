@@ -18,6 +18,10 @@ const bookingSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  seatNumbers: {
+    type: [Number],
+    default: []
+  },
   groupDiscount: {
     type: Boolean,
     default: false

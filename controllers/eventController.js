@@ -99,13 +99,20 @@ async function getSeatDetailsHandler(req, res) {
 async function purchaseTicketsHandler(req, res) {
   try {
     const eventId = req.params.id;
-    const { section, row, quantity } = req.body;
+    const { section, row, quantity, seatNumbers } = req.body;
 
     if (!section || !row || !quantity || quantity <= 0) {
       return sendError(res, BOOKING_INVALID_DATA, 400);
     }
 
-    const result = await bookSeats(eventId, section, row, quantity);
+    // If seatNumbers provided, validate them; otherwise allow sequential booking
+    if (seatNumbers) {
+      if (!Array.isArray(seatNumbers) || seatNumbers.length !== quantity) {
+        return sendError(res, 'Seat numbers must be an array matching quantity', 400);
+      }
+    }
+
+    const result = await bookSeats(eventId, section, row, quantity, seatNumbers);
 
     if (!result.success) {
       if (result.error === 'Not enough seats available') {

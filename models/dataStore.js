@@ -61,17 +61,35 @@ async function getAvailability(eventId) {
     const event = await Event.findById(eventId).lean();
     if (!event) return null;
 
+    // Get all bookings for this event
+    const bookings = await Booking.find({ eventId: eventId }).lean();
+
     const availability = {};
     event.sections.forEach(section => {
       availability[section.name] = {};
       section.rows.forEach(row => {
-        const seats = event.seats[section.name]?.[row.name] || [];
-        const bookedSeats = seats.filter(seat => seat === true).length;
         const totalSeats = row.totalSeats;
+        
+        // Count booked seats for this section/row from bookings
+        const sectionRowBookings = bookings.filter(
+          booking => booking.section === section.name && booking.row === row.name
+        );
+        
+        // Count booked seats (from seatNumbers if available, otherwise use quantity for old bookings)
+        let bookedCount = 0;
+        sectionRowBookings.forEach(booking => {
+          if (booking.seatNumbers && Array.isArray(booking.seatNumbers) && booking.seatNumbers.length > 0) {
+            bookedCount += booking.seatNumbers.length;
+          } else {
+            // Old bookings without seatNumbers - use quantity
+            bookedCount += booking.quantity || 0;
+          }
+        });
+        
         availability[section.name][row.name] = {
-          available: totalSeats - bookedSeats,
+          available: totalSeats - bookedCount,
           total: totalSeats,
-          booked: bookedSeats
+          booked: bookedCount
         };
       });
     });
@@ -90,17 +108,37 @@ async function getSeatDetails(eventId, section, row) {
       return null;
     }
 
-    const seats = event.seats[section][row];
-    return seats.map((isBooked, index) => ({
-      seatNumber: index + 1,
-      isBooked: isBooked
-    }));
+    // Get all bookings for this event, section, and row
+    const bookings = await Booking.find({
+      eventId: eventId,
+      section: section,
+      row: row
+    }).lean();
+
+    // Collect all booked seat numbers from bookings
+    const bookedSeatNumbers = new Set();
+    bookings.forEach(booking => {
+      if (booking.seatNumbers && Array.isArray(booking.seatNumbers)) {
+        booking.seatNumbers.forEach(seatNum => bookedSeatNumbers.add(seatNum));
+      }
+    });
+
+    const totalSeats = event.seats[section][row].length;
+    
+    // Return seat details based on bookings (source of truth)
+    return Array.from({ length: totalSeats }, (_, index) => {
+      const seatNumber = index + 1;
+      return {
+        seatNumber: seatNumber,
+        isBooked: bookedSeatNumbers.has(seatNumber)
+      };
+    });
   } catch (error) {
     throw error;
   }
 }
 
-async function bookSeats(eventId, section, row, quantity) {
+async function bookSeats(eventId, section, row, quantity, seatNumbers = null) {
   try {
     const event = await Event.findById(eventId);
     if (!event) return { success: false, error: 'Event not found' };
@@ -109,29 +147,52 @@ async function bookSeats(eventId, section, row, quantity) {
       return { success: false, error: 'Invalid section or row' };
     }
 
-    const seats = event.seats[section][row];
-    const availableSeats = seats.filter(seat => seat === false).length;
+    const totalSeats = event.seats[section][row].length;
 
-    if (availableSeats < quantity) {
-      return { success: false, error: 'Not enough seats available', available: availableSeats };
-    }
+    // Get existing bookings to check for conflicts
+    const existingBookings = await Booking.find({
+      eventId: eventId,
+      section: section,
+      row: row
+    }).lean();
 
-    let bookedCount = 0;
-    for (let i = 0; i < seats.length && bookedCount < quantity; i++) {
-      if (seats[i] === false) {
-        seats[i] = true;
-        bookedCount++;
+    const bookedSeatNumbers = new Set();
+    existingBookings.forEach(booking => {
+      if (booking.seatNumbers && Array.isArray(booking.seatNumbers)) {
+        booking.seatNumbers.forEach(seatNum => bookedSeatNumbers.add(seatNum));
+      }
+    });
+
+    // If seatNumbers provided, book specific seats
+    if (seatNumbers && Array.isArray(seatNumbers) && seatNumbers.length === quantity) {
+      // Validate seat numbers
+      for (const seatNum of seatNumbers) {
+        if (seatNum < 1 || seatNum > totalSeats) {
+          return { success: false, error: `Invalid seat number: ${seatNum}` };
+        }
+        if (bookedSeatNumbers.has(seatNum)) {
+          return { success: false, error: `Seat ${seatNum} is already booked` };
+        }
+      }
+    } else {
+      // Sequential booking (backward compatibility for tests)
+      const availableCount = totalSeats - bookedSeatNumbers.size;
+      if (availableCount < quantity) {
+        return { success: false, error: 'Not enough seats available', available: availableCount };
       }
     }
 
-    event.markModified('seats');
-    await event.save();
+    // Determine which seat numbers were booked
+    const seatsToBook = seatNumbers && Array.isArray(seatNumbers) && seatNumbers.length === quantity
+      ? seatNumbers.sort((a, b) => a - b)
+      : [];
 
     const booking = new Booking({
       eventId: event._id,
       section,
       row,
       quantity,
+      seatNumbers: seatsToBook,
       groupDiscount: quantity >= 4
     });
     await booking.save();
