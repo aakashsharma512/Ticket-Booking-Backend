@@ -2,16 +2,34 @@ const mongoose = require('mongoose');
 
 const connectDB = async () => {
   try {
-    const mongoURI = process.env.MONGODB_URI || 'mongodb+srv://aakisharma512_db_user:6U2WM5ApGF6b88O6@cluster0.d5cmrnm.mongodb.net/ticket_booking?retryWrites=true&w=majority';
+    const mongoURI = process.env.MONGODB_URI;
     
-    await mongoose.connect(mongoURI);
+    if (!mongoURI) {
+      throw new Error('MongoDB URI is not defined in environment variables');
+    }
+
+    const options = {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    };
+
+    await mongoose.connect(mongoURI, options);
     
     console.log('MongoDB Connected Successfully');
+    
+    // Handle connection events
+    mongoose.connection.on('error', (err) => {
+      console.error('MongoDB connection error:', err);
+    });
+
+    mongoose.connection.on('disconnected', () => {
+      console.log('MongoDB disconnected');
+    });
+
   } catch (error) {
-    console.error('MongoDB connection error:', error);
+    console.error('MongoDB connection error:', error.message);
     process.exit(1);
   }
 };
 
 module.exports = connectDB;
-

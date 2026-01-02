@@ -13,7 +13,7 @@ npm install
 ```
 PORT=5000
 NODE_ENV=development
-MONGODB_URI=mongodb+srv://aakisharma512_db_user:6U2WM5ApGF6b88O6@cluster0.d5cmrnm.mongodb.net/ticket_booking?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://aakisharma512_db_user:6U2WM5ApGF6b88O6@cluster0.d5cmrnm.mongodb.net/ticket_booking
 ```
 
 3. Start the server:
@@ -74,13 +74,16 @@ npm test
 
 ## Project Structure
 
-- `server.js` - Main Express server
-- `config/database.js` - MongoDB connection
-- `routes/` - API routes
+- `server.js` - Server entry point with graceful shutdown
+- `app.js` - Express app configuration and middleware setup
+- `config/` - Configuration files
+  - `database.js` - MongoDB connection
+  - `constants.js` - Application constants
+- `routes/` - API route definitions
 - `controllers/` - Business logic handlers
-- `models/` - Database models and data access
-- `middleware/` - Request logging middleware
-- `utils/` - Helper functions and messages
+- `models/` - Database models and data access layer
+- `middleware/` - Custom middleware (logging, error handling)
+- `utils/` - Helper functions, messages, and utilities
 - `tests/` - Unit tests
 
 ## Database

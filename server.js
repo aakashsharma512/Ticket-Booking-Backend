@@ -1,24 +1,30 @@
-const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
+const app = require('./app');
 
-const connectDB = require('./config/database');
-const requestLogger = require('./middleware/logger');
-const eventRoutes = require('./routes/eventRoutes');
-const adminRoutes = require('./routes/adminRoutes');
-
-const app = express();
 const PORT = process.env.PORT || 5000;
 
-connectDB();
-
-app.use(cors());
-app.use(express.json());
-app.use(requestLogger);
-
-app.use('/events', eventRoutes);
-app.use('/admin', adminRoutes);
-
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Rejection:', err);
+  server.close(() => {
+    process.exit(1);
+  });
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('Process terminated');
+  });
 });

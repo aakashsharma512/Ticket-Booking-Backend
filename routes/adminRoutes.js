@@ -5,8 +5,8 @@ const {
   getAdminStatsHandler
 } = require('../controllers/adminController');
 
+// Admin routes
 router.get('/bookings', getAllBookingsHandler);
 router.get('/stats', getAdminStatsHandler);
 
 module.exports = router;
-
